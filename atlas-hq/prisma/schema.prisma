@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  status      String     @default("active") // active, on_hold, completed, archived
+  progress    Int        @default(0)
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  artifacts   Artifact[]
+  tasks       Task[]
+  tags        ProjectTag[]
+}
+
+model Artifact {
+  id             String   @id @default(cuid())
+  projectId      String?
+  project        Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  filePath       String
+  fileName       String
+  type           String   // code, doc, image, data, config, other
+  language       String?
+  size           Int?
+  conversationId String?
+  metadata       String?  // JSON string for additional data
+  createdAt      DateTime @default(now())
+
+  @@index([projectId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  description String
+  status      String    @default("queued") // queued, active, completed, failed, cancelled
+  priority    String    @default("normal") // urgent, high, normal, low
+  source      String?   // terminal, whatsapp, discord, telegram, web
+  output      String?   // Task output/result
+  error       String?   // Error message if failed
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  duration    Int?      // Duration in seconds
+  createdAt   DateTime  @default(now())
+
+  @@index([projectId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Tag {
+  id       String       @id @default(cuid())
+  name     String       @unique
+  color    String?      // Hex color for display
+  projects ProjectTag[]
+}
+
+model ProjectTag {
+  projectId String
+  tagId     String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, tagId])
+}
+
+model Widget {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // status-card, chart, list, custom
+  position  String   // dashboard, sidebar
+  config    String   // JSON configuration
+  enabled   Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   // info, success, warning, error
+  read      Boolean  @default(false)
+  action    String?  // JSON with label and url
+  createdAt DateTime @default(now())
+
+  @@index([read])
+  @@index([createdAt])
+}
+
+model Settings {
+  id        String   @id @default("default")
+  config    String   // JSON configuration
+  updatedAt DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  type      String   // message, tool_call, task_complete, etc.
+  data      String?  // JSON data
+  projectId String?
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+  @@index([projectId])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  sessionId String   // Atlas session ID
+  channel   String   // whatsapp, telegram, discord, terminal, web
+  projectId String?
+  title     String?  // Auto-generated or manual title
+  summary   String?  // AI-generated summary
+  metadata  String?  // JSON with additional data
+  startedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([channel])
+  @@index([projectId])
+  @@index([startedAt])
+}
