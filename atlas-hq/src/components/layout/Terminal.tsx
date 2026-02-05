@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useUIStore } from '@/stores/ui-store';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -52,10 +53,20 @@ const quickCommands = [
 
 export function Terminal() {
   const { terminalOpen, terminalExpanded, toggleTerminal, toggleTerminalExpanded, setTerminalOpen } = useUIStore();
+  const { 
+    model: gatewayModel, 
+    isConnected: gatewayConnected, 
+    isConnecting: gatewayConnecting, 
+    messages: gatewayMessages,
+    setModel, 
+    setIsConnected: setGatewayConnected, 
+    setIsConnecting: setGatewayConnecting,
+    addMessage,
+    updateMessage,
+    clearMessages,
+    setMessages
+  } = useGatewayStore();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo>({
     model: 'connecting...',
@@ -73,13 +84,14 @@ export function Terminal() {
       const scrollElement = scrollRef.current;
       scrollElement.scrollTop = scrollElement.scrollHeight;
     }
-  }, [messages, isThinking]);
+  }, [gatewayMessages, isThinking]);
 
   // Connect to WebSocket
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     
     setIsConnecting(true);
+    setGatewayConnecting(true);
     
     try {
       const wsHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
@@ -128,6 +140,8 @@ export function Terminal() {
           if (data.type === 'res' && data.payload?.type === 'hello-ok') {
             setIsConnected(true);
             setIsConnecting(false);
+            setGatewayConnected(true);
+            setGatewayConnecting(false);
             
             // Extract model and session info from snapshot
             const snapshot = data.payload?.snapshot;
@@ -135,18 +149,22 @@ export function Terminal() {
             const mainSession = sessions.find((s: { key: string }) => s.key === 'agent:main:main');
             
             if (mainSession) {
+              const model = mainSession.model || 'unknown';
               setSessionInfo({
-                model: mainSession.model || 'unknown',
+                model,
                 sessionKey: mainSession.key,
                 agentId: mainSession.agentId,
                 contextTokens: mainSession.contextTokens,
                 maxTokens: mainSession.maxContextTokens,
               });
+              setModel(model);
             } else if (snapshot?.sessionDefaults) {
+              const model = snapshot.sessionDefaults.defaultModel || 'unknown';
               setSessionInfo(prev => ({
                 ...prev,
-                model: snapshot.sessionDefaults.defaultModel || prev.model,
+                model,
               }));
+              setModel(model);
             }
             
             // Request session status to get current model
@@ -158,12 +176,12 @@ export function Terminal() {
             }));
             
             // Welcome message
-            setMessages([{
+            addMessage({
               id: 'welcome',
               role: 'system',
               content: '🟢 Connected to Atlas Gateway. Ready to chat.',
               timestamp: new Date(),
-            }]);
+            });
             return;
           }
           
@@ -177,6 +195,7 @@ export function Terminal() {
                 contextTokens: mainSession.contextTokens,
                 maxTokens: mainSession.maxContextTokens,
               }));
+              setModel(mainSession.model);
             }
             return;
           }
@@ -184,15 +203,12 @@ export function Terminal() {
           // Handle errors
           if (data.type === 'res' && data.error) {
             console.error('Gateway error:', data.error);
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now().toString(),
-                role: 'system',
-                content: `⚠️ ${data.error.message || 'Connection error'}`,
-                timestamp: new Date(),
-              },
-            ]);
+            addMessage({
+              id: Date.now().toString(),
+              role: 'system',
+              content: `⚠️ ${data.error.message || 'Connection error'}`,
+              timestamp: new Date(),
+            });
             setIsThinking(false);
             return;
           }
@@ -212,6 +228,7 @@ export function Terminal() {
             // Extract model from agent events
             if (payload?.data?.model) {
               setSessionInfo(prev => ({ ...prev, model: payload.data.model }));
+              setModel(payload.data.model);
             }
           }
           
@@ -233,16 +250,13 @@ export function Terminal() {
               }
               
               if (textContent) {
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: payload.runId || Date.now().toString(),
-                    role: 'assistant',
-                    content: textContent,
-                    timestamp: new Date(msg.timestamp || Date.now()),
-                    model: sessionInfo.model,
-                  },
-                ]);
+                addMessage({
+                  id: payload.runId || Date.now().toString(),
+                  role: 'assistant',
+                  content: textContent,
+                  timestamp: new Date(msg.timestamp || Date.now()),
+                  model: sessionInfo.model,
+                });
               }
               setIsThinking(false);
             }
@@ -255,6 +269,8 @@ export function Terminal() {
       ws.onclose = () => {
         setIsConnected(false);
         setIsConnecting(false);
+        setGatewayConnected(false);
+        setGatewayConnecting(false);
         setIsThinking(false);
         
         reconnectTimeoutRef.current = setTimeout(() => {
@@ -265,30 +281,35 @@ export function Terminal() {
       ws.onerror = () => {
         setIsConnected(false);
         setIsConnecting(false);
+        setGatewayConnected(false);
+        setGatewayConnecting(false);
       };
       
       wsRef.current = ws;
     } catch (err) {
       console.error('Failed to connect:', err);
       setIsConnecting(false);
+      setGatewayConnecting(false);
     }
   }, [sessionInfo.model]);
 
   useEffect(() => {
-    if (terminalOpen) {
-      connect();
-    }
+    // Connect on mount, regardless of terminalOpen state
+    connect();
     
     return () => {
+      // Only cleanup on unmount (when component is destroyed)
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
-      wsRef.current?.close();
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      }
     };
-  }, [terminalOpen, connect]);
+  }, []); // Empty dependency array - run once on mount
 
   const handleSubmit = () => {
-    if (!input.trim() || !isConnected) return;
+    if (!input.trim() || !gatewayConnected) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -297,7 +318,7 @@ export function Terminal() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    addMessage(userMessage);
     
     const chatId = `chat-${Date.now()}`;
     const chatRequest = {
@@ -324,18 +345,19 @@ export function Terminal() {
     }
   };
 
-  const clearMessages = () => {
-    setMessages([{
+  const handleClearChat = () => {
+    clearMessages(); // Call store's clearMessages
+    addMessage({
       id: 'cleared',
       role: 'system',
       content: '🗑️ Chat cleared.',
       timestamp: new Date(),
-    }]);
+    });
   };
 
   const handleQuickCommand = (cmd: string) => {
     if (cmd === '/clear') {
-      clearMessages();
+      handleClearChat();
     } else {
       setInput(cmd + ' ');
       textareaRef.current?.focus();
@@ -382,7 +404,7 @@ export function Terminal() {
             <div className="flex items-center gap-2">
               <div className={cn(
                 'w-2 h-2 rounded-full',
-                isConnected ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50' : 'bg-red-500'
+                gatewayConnected ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50' : 'bg-red-500'
               )} />
               <span className="text-sm font-medium text-foreground">Atlas Terminal</span>
             </div>
@@ -441,21 +463,21 @@ export function Terminal() {
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full" ref={scrollRef}>
             <div className="p-4 space-y-4">
-              {messages.length === 0 && !isConnecting && (
+              {gatewayMessages.length === 0 && !gatewayConnecting && (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <Bot className="w-12 h-12 mb-4 opacity-50" />
                   <p className="text-sm">Start a conversation with Atlas</p>
                 </div>
               )}
               
-              {isConnecting && (
+              {gatewayConnecting && (
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                   <span className="text-sm">Connecting to Gateway...</span>
                 </div>
               )}
               
-              {messages.map((message) => (
+              {gatewayMessages.map((message) => (
                 <motion.div
                   key={message.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -560,8 +582,8 @@ export function Terminal() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={isConnected ? "Message Atlas..." : "Connecting..."}
-                disabled={!isConnected || isThinking}
+                placeholder={gatewayConnected ? "Message Atlas..." : "Connecting..."}
+                disabled={!gatewayConnected || isThinking}
                 className={cn(
                   "min-h-[48px] max-h-32 resize-none rounded-xl",
                   "bg-muted/30 border-border/50 focus:border-cyan/50",
@@ -573,7 +595,7 @@ export function Terminal() {
             </div>
             <Button
               onClick={handleSubmit}
-              disabled={!input.trim() || !isConnected || isThinking}
+              disabled={!input.trim() || !gatewayConnected || isThinking}
               className={cn(
                 "h-12 w-12 rounded-xl",
                 "bg-gradient-to-r from-cyan to-purple",

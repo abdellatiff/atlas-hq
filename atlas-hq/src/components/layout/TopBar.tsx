@@ -4,6 +4,7 @@ import { Bell, Terminal, Zap, Menu, Bot } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/ui-store';
+import { useGatewayStore } from '@/stores/gateway-store';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,7 @@ interface TopBarProps {
 
 export function TopBar({ title }: TopBarProps) {
   const { toggleTerminal, terminalOpen, toggleSidebar, sidebarCollapsed } = useUIStore();
+  const { model, isConnected } = useGatewayStore();
 
   return (
     <header className="h-16 border-b border-border bg-background/50 backdrop-blur-sm sticky top-0 z-30">
@@ -46,11 +48,13 @@ export function TopBar({ title }: TopBarProps) {
           <div className="hidden sm:flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border">
               <div className="relative">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75" />
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                {isConnected && (
+                  <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75" />
+                )}
               </div>
               <span className="text-xs font-medium text-muted-foreground">
-                Atlas Online
+                {isConnected ? 'Atlas Online' : 'Connecting...'}
               </span>
             </div>
             
@@ -58,7 +62,7 @@ export function TopBar({ title }: TopBarProps) {
             <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-cyan/20 to-purple/20 border border-cyan/30">
               <Bot className="w-3 h-3 text-cyan-600" />
               <span className="text-xs font-medium text-cyan-600">
-                Claude Opus 4.5
+                {model === 'connecting...' ? 'connecting...' : model.split('/').pop() || model}
               </span>
             </div>
           </div>
