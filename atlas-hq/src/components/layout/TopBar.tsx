@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Terminal, Zap, Menu } from 'lucide-react';
+import { Bell, Terminal, Zap, Menu, Bot } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/ui-store';
@@ -42,15 +42,25 @@ export function TopBar({ title }: TopBarProps) {
 
         {/* Right section */}
         <div className="flex items-center gap-2">
-          {/* Connection status */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border">
-            <div className="relative">
-              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75" />
+          {/* Connection status & Model */}
+          <div className="hidden sm:flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border">
+              <div className="relative">
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75" />
+              </div>
+              <span className="text-xs font-medium text-muted-foreground">
+                Atlas Online
+              </span>
             </div>
-            <span className="text-xs font-medium text-muted-foreground">
-              Atlas Online
-            </span>
+            
+            {/* Model badge */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-cyan/20 to-purple/20 border border-cyan/30">
+              <Bot className="w-3 h-3 text-cyan-600" />
+              <span className="text-xs font-medium text-cyan-600">
+                Claude Opus 4.5
+              </span>
+            </div>
           </div>
 
           {/* Terminal toggle */}

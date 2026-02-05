@@ -108,7 +108,7 @@ export default function SettingsPage() {
                   <div className="grid gap-2">
                     <Label>Gateway URL</Label>
                     <Input
-                      defaultValue="ws://localhost:18789"
+                      defaultValue="ws://localhost:63362/ws"
                       className="bg-muted border-border"
                     />
                   </div>
