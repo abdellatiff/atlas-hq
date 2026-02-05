@@ -90,7 +90,6 @@ export function Terminal() {
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     
-    setIsConnecting(true);
     setGatewayConnecting(true);
     
     try {
@@ -138,8 +137,6 @@ export function Terminal() {
           
           // Handle connect response - extract session info
           if (data.type === 'res' && data.payload?.type === 'hello-ok') {
-            setIsConnected(true);
-            setIsConnecting(false);
             setGatewayConnected(true);
             setGatewayConnecting(false);
             
@@ -267,8 +264,6 @@ export function Terminal() {
       };
       
       ws.onclose = () => {
-        setIsConnected(false);
-        setIsConnecting(false);
         setGatewayConnected(false);
         setGatewayConnecting(false);
         setIsThinking(false);
@@ -279,8 +274,6 @@ export function Terminal() {
       };
       
       ws.onerror = () => {
-        setIsConnected(false);
-        setIsConnecting(false);
         setGatewayConnected(false);
         setGatewayConnecting(false);
       };
@@ -288,25 +281,22 @@ export function Terminal() {
       wsRef.current = ws;
     } catch (err) {
       console.error('Failed to connect:', err);
-      setIsConnecting(false);
       setGatewayConnecting(false);
     }
   }, [sessionInfo.model]);
 
   useEffect(() => {
-    // Connect on mount, regardless of terminalOpen state
-    connect();
+    if (terminalOpen) {
+      connect();
+    }
     
     return () => {
-      // Only cleanup on unmount (when component is destroyed)
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close();
-      }
+      // Don't close WebSocket on cleanup - keep it alive
     };
-  }, []); // Empty dependency array - run once on mount
+  }, [terminalOpen, connect]);
 
   const handleSubmit = () => {
     if (!input.trim() || !gatewayConnected) return;
