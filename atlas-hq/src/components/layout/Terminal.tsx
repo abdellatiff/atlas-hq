@@ -285,18 +285,16 @@ export function Terminal() {
     }
   }, [sessionInfo.model]);
 
+  // Always keep WebSocket connected (regardless of terminal open/closed)
   useEffect(() => {
-    if (terminalOpen) {
-      connect();
-    }
+    connect();
     
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
-      // Don't close WebSocket on cleanup - keep it alive
     };
-  }, [terminalOpen, connect]);
+  }, [connect]);
 
   const handleSubmit = () => {
     if (!input.trim() || !gatewayConnected) return;
