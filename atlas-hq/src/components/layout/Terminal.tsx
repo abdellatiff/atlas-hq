@@ -252,7 +252,7 @@ export function Terminal() {
                   role: 'assistant',
                   content: textContent,
                   timestamp: new Date(msg.timestamp || Date.now()),
-                  model: sessionInfo.model,
+                  model: useGatewayStore.getState().model,
                 });
               }
               setIsThinking(false);
@@ -283,7 +283,7 @@ export function Terminal() {
       console.error('Failed to connect:', err);
       setGatewayConnecting(false);
     }
-  }, [sessionInfo.model]);
+  }, []); // Empty deps - connect is stable, handlers use store directly
 
   // Always keep WebSocket connected (regardless of terminal open/closed)
   useEffect(() => {
@@ -403,7 +403,7 @@ export function Terminal() {
               className="font-mono text-xs bg-muted/50 hover:bg-muted transition-colors"
             >
               <Zap className="w-3 h-3 mr-1 text-amber-500" />
-              {sessionInfo.model.split('/').pop() || sessionInfo.model}
+              {gatewayModel.split('/').pop() || gatewayModel}
             </Badge>
             
             {/* Thinking Indicator */}
