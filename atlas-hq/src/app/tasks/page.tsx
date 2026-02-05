@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   ListTodo,
@@ -16,33 +16,23 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 
-const demoTasks = {
-  active: {
-    id: '1',
-    description: 'Refactoring auth module with repository pattern',
-    progress: 60,
-    source: 'terminal',
-    startedAt: new Date(Date.now() - 2 * 60 * 1000),
-    output: [
-      '> Reading src/lib/auth.ts',
-      '> Found 3 authentication functions',
-      '> Creating repository interface...',
-    ],
-  },
-  queued: [
-    { id: '2', description: 'Write unit tests for auth repository', source: 'whatsapp', priority: 'high', createdAt: new Date(Date.now() - 1 * 60 * 1000) },
-    { id: '3', description: 'Update API documentation', source: 'discord', priority: 'normal', createdAt: new Date(Date.now() - 10 * 60 * 1000) },
-    { id: '4', description: 'Review PR #42 comments', source: 'telegram', priority: 'low', createdAt: new Date(Date.now() - 25 * 60 * 1000) },
-  ],
-  completed: [
-    { id: '5', description: 'Set up Prisma schema', status: 'completed', duration: 204, completedAt: new Date(Date.now() - 15 * 60 * 1000) },
-    { id: '6', description: 'Create Dashboard component', status: 'completed', duration: 492, completedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-    { id: '7', description: 'Deploy to staging', status: 'failed', duration: 105, completedAt: new Date(Date.now() - 3 * 60 * 60 * 1000), error: 'Build failed: Missing environment variable' },
-    { id: '8', description: 'Fix TypeScript errors', status: 'completed', duration: 128, completedAt: new Date(Date.now() - 4 * 60 * 60 * 1000) },
-  ],
-};
+interface Task {
+  id: string;
+  description: string;
+  status: 'queued' | 'active' | 'completed' | 'failed' | 'cancelled';
+  priority: 'urgent' | 'high' | 'normal' | 'low';
+  source?: string;
+  progress?: number;
+  output?: string;
+  error?: string;
+  duration?: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
 
 const priorityConfig = {
   urgent: { color: 'bg-red-500/20 text-red-500 border-red-500/30' },
@@ -66,6 +56,44 @@ function formatDuration(seconds: number) {
 }
 
 export default function TasksPage() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchTasks() {
+      try {
+        const res = await fetch('/api/tasks');
+        if (res.ok) {
+          const data = await res.json();
+          setTasks(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tasks:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTasks();
+  }, []);
+
+  const activeTask = tasks.find((t) => t.status === 'active');
+  const queuedTasks = tasks.filter((t) => t.status === 'queued');
+  const completedTasks = tasks.filter((t) => t.status === 'completed' || t.status === 'failed');
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -86,7 +114,7 @@ export default function TasksPage() {
       </div>
 
       {/* Active Task */}
-      {demoTasks.active && (
+      {activeTask && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -99,10 +127,10 @@ export default function TasksPage() {
           <div className="space-y-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-medium">{demoTasks.active.description}</p>
+                <p className="font-medium">{activeTask.description}</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {sourceIcons[demoTasks.active.source]} Started{' '}
-                  {formatDistanceToNow(demoTasks.active.startedAt, { addSuffix: true })}
+                  {sourceIcons[activeTask.source || 'web']} Started{' '}
+                  {activeTask.startedAt && formatDistanceToNow(new Date(activeTask.startedAt), { addSuffix: true })}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -117,18 +145,20 @@ export default function TasksPage() {
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-muted-foreground">Progress</span>
-                <span>{demoTasks.active.progress}%</span>
+                <span>{activeTask.progress || 0}%</span>
               </div>
-              <Progress value={demoTasks.active.progress} className="h-2" />
+              <Progress value={activeTask.progress || 0} className="h-2" />
             </div>
-            <div className="bg-background/50 rounded-lg p-3 font-mono text-xs">
-              {demoTasks.active.output.map((line, i) => (
-                <div key={i} className="text-muted-foreground">
-                  {line}
-                </div>
-              ))}
-              <div className="text-primary typing-cursor">█</div>
-            </div>
+            {activeTask.output && (
+              <div className="bg-background/50 rounded-lg p-3 font-mono text-xs">
+                {activeTask.output.split('\n').map((line, i) => (
+                  <div key={i} className="text-muted-foreground">
+                    {line}
+                  </div>
+                ))}
+                <div className="text-primary typing-cursor">█</div>
+              </div>
+            )}
           </div>
         </motion.div>
       )}
@@ -136,43 +166,50 @@ export default function TasksPage() {
       {/* Queued */}
       <div className="glass rounded-xl">
         <div className="p-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold">Queued ({demoTasks.queued.length})</h3>
+          <h3 className="font-semibold">Queued ({queuedTasks.length})</h3>
           <span className="text-sm text-muted-foreground">Drag to reorder</span>
         </div>
         <div className="divide-y divide-border">
-          {demoTasks.queued.map((task, index) => (
-            <motion.div
-              key={task.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="p-4 flex items-center gap-4 hover:bg-muted/30 transition-colors"
-            >
-              <span className="text-muted-foreground font-mono text-sm w-6">
-                {index + 1}
-              </span>
-              <Clock className="w-4 h-4 text-muted-foreground" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{task.description}</p>
-                <p className="text-xs text-muted-foreground">
-                  {sourceIcons[task.source]} Queued{' '}
-                  {formatDistanceToNow(task.createdAt, { addSuffix: true })}
-                </p>
-              </div>
-              <Badge
-                variant="outline"
-                className={priorityConfig[task.priority as keyof typeof priorityConfig].color}
+          {queuedTasks.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p>No queued tasks</p>
+            </div>
+          ) : (
+            queuedTasks.map((task, index) => (
+              <motion.div
+                key={task.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="p-4 flex items-center gap-4 hover:bg-muted/30 transition-colors"
               >
-                {task.priority}
-              </Badge>
-              <Button variant="ghost" size="sm">
-                <Play className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" className="text-destructive">
-                <X className="w-4 h-4" />
-              </Button>
-            </motion.div>
-          ))}
+                <span className="text-muted-foreground font-mono text-sm w-6">
+                  {index + 1}
+                </span>
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{task.description}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {sourceIcons[task.source || 'web']} Queued{' '}
+                    {formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}
+                  </p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={priorityConfig[task.priority as keyof typeof priorityConfig].color}
+                >
+                  {task.priority}
+                </Badge>
+                <Button variant="ghost" size="sm">
+                  <Play className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="text-destructive">
+                  <X className="w-4 h-4" />
+                </Button>
+              </motion.div>
+            ))
+          )}
         </div>
       </div>
 
@@ -182,35 +219,46 @@ export default function TasksPage() {
           <h3 className="font-semibold">Recently Completed</h3>
         </div>
         <div className="divide-y divide-border">
-          {demoTasks.completed.map((task, index) => (
-            <motion.div
-              key={task.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="p-4 flex items-center gap-4"
-            >
-              {task.status === 'completed' ? (
-                <CheckCircle className="w-5 h-5 text-emerald-500" />
-              ) : (
-                <XCircle className="w-5 h-5 text-destructive" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className={`font-medium truncate ${task.status === 'failed' ? 'text-muted-foreground' : ''}`}>
-                  {task.description}
-                </p>
-                {task.error && (
-                  <p className="text-xs text-destructive">{task.error}</p>
+          {completedTasks.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p>No completed tasks yet</p>
+            </div>
+          ) : (
+            completedTasks.map((task, index) => (
+              <motion.div
+                key={task.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="p-4 flex items-center gap-4"
+              >
+                {task.status === 'completed' ? (
+                  <CheckCircle className="w-5 h-5 text-emerald-500" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-destructive" />
                 )}
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {formatDuration(task.duration)}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {formatDistanceToNow(task.completedAt, { addSuffix: true })}
-              </span>
-            </motion.div>
-          ))}
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium truncate ${task.status === 'failed' ? 'text-muted-foreground' : ''}`}>
+                    {task.description}
+                  </p>
+                  {task.error && (
+                    <p className="text-xs text-destructive">{task.error}</p>
+                  )}
+                </div>
+                {task.duration && (
+                  <span className="text-sm text-muted-foreground">
+                    {formatDuration(task.duration)}
+                  </span>
+                )}
+                {task.completedAt && (
+                  <span className="text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(task.completedAt), { addSuffix: true })}
+                  </span>
+                )}
+              </motion.div>
+            ))
+          )}
         </div>
       </div>
     </div>

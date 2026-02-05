@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MessageSquare, Search, Filter, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -14,40 +15,14 @@ import {
 } from '@/components/ui/select';
 import { formatDistanceToNow } from 'date-fns';
 
-const demoConversations = [
-  {
-    id: '1',
-    channel: 'whatsapp',
-    preview: "Here's the updated authentication flow with JWT refresh tokens...",
-    toolCalls: 4,
-    filesCreated: 2,
-    updatedAt: new Date(Date.now() - 10 * 60 * 1000),
-  },
-  {
-    id: '2',
-    channel: 'terminal',
-    preview: 'All 47 tests passing. Coverage increased to 84%.',
-    toolCalls: 2,
-    filesCreated: 0,
-    updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-  },
-  {
-    id: '3',
-    channel: 'discord',
-    preview: 'The tests are now passing after the fix. I also added error handling.',
-    toolCalls: 6,
-    filesCreated: 3,
-    updatedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-  },
-  {
-    id: '4',
-    channel: 'telegram',
-    preview: 'Database migration completed successfully. All tables are in sync.',
-    toolCalls: 3,
-    filesCreated: 1,
-    updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-  },
-];
+interface Conversation {
+  id: string;
+  channel: string;
+  preview: string;
+  toolCalls: number;
+  filesCreated: number;
+  updatedAt: string;
+}
 
 const channelConfig: Record<string, { icon: string; color: string }> = {
   whatsapp: { icon: '📱', color: 'bg-emerald-500/20 text-emerald-500' },
@@ -60,12 +35,51 @@ const channelConfig: Record<string, { icon: string; color: string }> = {
 export default function CommsPage() {
   const [search, setSearch] = useState('');
   const [channelFilter, setChannelFilter] = useState('all');
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredConversations = demoConversations.filter((conv) => {
+  useEffect(() => {
+    async function fetchConversations() {
+      try {
+        // Note: Conversations API not yet implemented
+        // Will show empty state until API is available
+        const res = await fetch('/api/conversations');
+        if (res.ok) {
+          const data = await res.json();
+          setConversations(data);
+        }
+      } catch (error) {
+        // API not available yet, show empty state
+        console.log('Conversations API not available yet');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchConversations();
+  }, []);
+
+  const filteredConversations = conversations.filter((conv) => {
     const matchesSearch = conv.preview.toLowerCase().includes(search.toLowerCase());
     const matchesChannel = channelFilter === 'all' || conv.channel === channelFilter;
     return matchesSearch && matchesChannel;
   });
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <div className="flex gap-4">
+          <Skeleton className="h-10 flex-1" />
+          <Skeleton className="h-10 w-48" />
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -135,7 +149,7 @@ export default function CommsPage() {
                     )}
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {formatDistanceToNow(conv.updatedAt, { addSuffix: true })}
+                      {formatDistanceToNow(new Date(conv.updatedAt), { addSuffix: true })}
                     </span>
                   </div>
                 </div>

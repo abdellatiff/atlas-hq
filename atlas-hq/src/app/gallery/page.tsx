@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Image as ImageIcon,
@@ -17,18 +17,17 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 
-const demoArtifacts = [
-  { id: '1', fileName: 'Dashboard.tsx', type: 'code', language: 'TypeScript', projectName: 'Atlas HQ', createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-  { id: '2', fileName: 'api_client.py', type: 'code', language: 'Python', projectName: 'API Layer', createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-  { id: '3', fileName: 'README.md', type: 'doc', projectName: 'Atlas HQ', createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-  { id: '4', fileName: 'architecture.png', type: 'image', projectName: 'Atlas HQ', createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
-  { id: '5', fileName: 'migration_001.sql', type: 'data', projectName: 'DB Migration', createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) },
-  { id: '6', fileName: 'config.json', type: 'config', projectName: 'API Layer', createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-  { id: '7', fileName: 'types.ts', type: 'code', language: 'TypeScript', projectName: 'Atlas HQ', createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000) },
-  { id: '8', fileName: 'globals.css', type: 'code', language: 'CSS', projectName: 'Atlas HQ', createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-];
+interface Artifact {
+  id: string;
+  fileName: string;
+  type: 'code' | 'doc' | 'image' | 'data' | 'config' | 'other';
+  language?: string;
+  project?: { name: string } | null;
+  createdAt: string;
+}
 
 const typeConfig = {
   code: { icon: FileCode, color: 'from-cyan/20 to-blue-500/20 border-cyan/30', iconColor: 'text-cyan' },
@@ -43,21 +42,58 @@ export default function GalleryPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredArtifacts = demoArtifacts.filter((artifact) => {
+  useEffect(() => {
+    async function fetchArtifacts() {
+      try {
+        const res = await fetch('/api/artifacts');
+        if (res.ok) {
+          const data = await res.json();
+          setArtifacts(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch artifacts:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchArtifacts();
+  }, []);
+
+  const filteredArtifacts = artifacts.filter((artifact) => {
     const matchesSearch = artifact.fileName.toLowerCase().includes(search.toLowerCase());
     const matchesType = typeFilter === 'all' || artifact.type === typeFilter;
     return matchesSearch && matchesType;
   });
 
   const typeCounts = {
-    all: demoArtifacts.length,
-    code: demoArtifacts.filter((a) => a.type === 'code').length,
-    doc: demoArtifacts.filter((a) => a.type === 'doc').length,
-    image: demoArtifacts.filter((a) => a.type === 'image').length,
-    data: demoArtifacts.filter((a) => a.type === 'data').length,
-    config: demoArtifacts.filter((a) => a.type === 'config').length,
+    all: artifacts.length,
+    code: artifacts.filter((a) => a.type === 'code').length,
+    doc: artifacts.filter((a) => a.type === 'doc').length,
+    image: artifacts.filter((a) => a.type === 'image').length,
+    data: artifacts.filter((a) => a.type === 'data').length,
+    config: artifacts.filter((a) => a.type === 'config').length,
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <div className="flex gap-4">
+          <Skeleton className="h-10 flex-1 max-w-md" />
+          <Skeleton className="h-10 w-20" />
+        </div>
+        <Skeleton className="h-10 w-full max-w-xl" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <Skeleton key={i} className="h-36 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -131,7 +167,7 @@ export default function GalleryPage() {
                   <Icon className={`w-10 h-10 ${config.iconColor}`} />
                 </div>
                 <p className="text-sm font-medium truncate">{artifact.fileName}</p>
-                <p className="text-xs text-muted-foreground truncate">{artifact.projectName}</p>
+                <p className="text-xs text-muted-foreground truncate">{artifact.project?.name}</p>
                 {artifact.language && (
                   <Badge variant="outline" className="text-xs mt-1">
                     {artifact.language}
@@ -157,13 +193,13 @@ export default function GalleryPage() {
                 <Icon className={`w-6 h-6 ${config.iconColor}`} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{artifact.fileName}</p>
-                  <p className="text-sm text-muted-foreground">{artifact.projectName}</p>
+                  <p className="text-sm text-muted-foreground">{artifact.project?.name}</p>
                 </div>
                 {artifact.language && (
                   <Badge variant="outline">{artifact.language}</Badge>
                 )}
                 <span className="text-xs text-muted-foreground">
-                  {formatDistanceToNow(artifact.createdAt, { addSuffix: true })}
+                  {formatDistanceToNow(new Date(artifact.createdAt), { addSuffix: true })}
                 </span>
               </motion.div>
             );

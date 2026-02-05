@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   BarChart3,
@@ -15,42 +16,109 @@ import {
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const stats = [
-  { label: 'Messages', value: '127', change: '+23%', trend: 'up', icon: MessageSquare },
-  { label: 'Tool Calls', value: '842', change: '+15%', trend: 'up', icon: Wrench },
-  { label: 'Tokens', value: '24.6k', change: '+31%', trend: 'up', icon: Coins },
-  { label: 'Files Created', value: '18', change: '+8%', trend: 'up', icon: FileCode },
-];
+interface AnalyticsData {
+  stats: Record<string, number>;
+  events: unknown[];
+}
 
-const toolUsage = [
-  { name: 'bash', count: 312, percentage: 37 },
-  { name: 'edit', count: 245, percentage: 29 },
-  { name: 'read', count: 198, percentage: 24 },
-  { name: 'write', count: 87, percentage: 10 },
-];
-
-const channelDistribution = [
-  { name: 'Terminal', percentage: 42, color: 'bg-primary' },
-  { name: 'Web', percentage: 28, color: 'bg-secondary' },
-  { name: 'WhatsApp', percentage: 18, color: 'bg-emerald-500' },
-  { name: 'Discord', percentage: 12, color: 'bg-indigo-500' },
-];
-
-const projectActivity = [
-  { name: 'Atlas HQ', percentage: 48 },
-  { name: 'API Layer', percentage: 28 },
-  { name: 'Landing Page', percentage: 14 },
-  { name: 'Other', percentage: 10 },
-];
-
-const achievements = [
-  { icon: Flame, label: '14-day streak', color: 'text-orange-500' },
-  { icon: Trophy, label: '100 tasks completed', color: 'text-amber-500' },
-  { icon: Zap, label: 'Power user', color: 'text-primary' },
+const defaultAchievements = [
+  { icon: Flame, label: 'Start your streak!', color: 'text-orange-500' },
+  { icon: Trophy, label: 'Complete tasks to unlock', color: 'text-amber-500' },
+  { icon: Zap, label: 'Keep going!', color: 'text-primary' },
 ];
 
 export default function AnalyticsPage() {
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchAnalytics() {
+      try {
+        const res = await fetch('/api/analytics?days=7');
+        if (res.ok) {
+          const data = await res.json();
+          setAnalytics(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch analytics:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAnalytics();
+  }, []);
+
+  // Compute stats from analytics data
+  const stats = [
+    {
+      label: 'Messages',
+      value: analytics?.stats?.message?.toString() || '0',
+      change: '--',
+      trend: 'up' as const,
+      icon: MessageSquare
+    },
+    {
+      label: 'Tool Calls',
+      value: analytics?.stats?.tool_call?.toString() || '0',
+      change: '--',
+      trend: 'up' as const,
+      icon: Wrench
+    },
+    {
+      label: 'Tokens',
+      value: analytics?.stats?.tokens?.toString() || '0',
+      change: '--',
+      trend: 'up' as const,
+      icon: Coins
+    },
+    {
+      label: 'Files Created',
+      value: analytics?.stats?.file_created?.toString() || '0',
+      change: '--',
+      trend: 'up' as const,
+      icon: FileCode
+    },
+  ];
+
+  // Placeholder data - will be computed from real analytics
+  const toolUsage = [
+    { name: 'bash', count: 0, percentage: 0 },
+    { name: 'edit', count: 0, percentage: 0 },
+    { name: 'read', count: 0, percentage: 0 },
+    { name: 'write', count: 0, percentage: 0 },
+  ];
+
+  const channelDistribution = [
+    { name: 'Terminal', percentage: 0, color: 'bg-primary' },
+    { name: 'Web', percentage: 0, color: 'bg-secondary' },
+    { name: 'WhatsApp', percentage: 0, color: 'bg-emerald-500' },
+    { name: 'Discord', percentage: 0, color: 'bg-indigo-500' },
+  ];
+
+  const projectActivity: { name: string; percentage: number }[] = [];
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-8 w-24" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Skeleton className="h-64 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -188,15 +256,19 @@ export default function AnalyticsPage() {
             Project Activity
           </h3>
           <div className="space-y-4">
-            {projectActivity.map((project) => (
-              <div key={project.name}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="font-medium">{project.name}</span>
-                  <span className="text-muted-foreground">{project.percentage}%</span>
+            {projectActivity.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No project activity yet</p>
+            ) : (
+              projectActivity.map((project) => (
+                <div key={project.name}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="font-medium">{project.name}</span>
+                    <span className="text-muted-foreground">{project.percentage}%</span>
+                  </div>
+                  <Progress value={project.percentage} className="h-2" />
                 </div>
-                <Progress value={project.percentage} className="h-2" />
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </motion.div>
 
@@ -212,7 +284,7 @@ export default function AnalyticsPage() {
             Streaks & Achievements
           </h3>
           <div className="space-y-4">
-            {achievements.map((achievement) => {
+            {defaultAchievements.map((achievement) => {
               const Icon = achievement.icon;
               return (
                 <div
@@ -227,9 +299,9 @@ export default function AnalyticsPage() {
             <div className="mt-4">
               <div className="flex justify-between text-sm mb-2">
                 <span>Goal: 30-day streak</span>
-                <span className="text-muted-foreground">14/30</span>
+                <span className="text-muted-foreground">0/30</span>
               </div>
-              <Progress value={(14 / 30) * 100} className="h-2" />
+              <Progress value={0} className="h-2" />
             </div>
           </div>
         </motion.div>
